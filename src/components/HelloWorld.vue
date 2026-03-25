@@ -1,113 +1,8 @@
 <script setup>
-import {ref, computed} from 'vue'
-import {ElMessageBox} from "element-plus";
-
-// 响应式数据
-const newTodo = ref('')
-const todos = ref([])
-const selectedTodos = ref([])
-let idCounter = 1
-
-// 编辑弹窗
-const isEditModalVisible = ref(false)
-const currentTodo = ref(null)
-const editTodoName = ref('')
-
-// 计算属性
-const completedCount = computed(() => todos.value.filter(t => t.status === 'completed').length)
-const pendingCount = computed(() => todos.value.filter(t => t.status === 'pending').length)
-const selectAll = computed({
-  get: () => selectedTodos.value.length === todos.value.length && todos.value.length > 0,
-  set: (val) => toggleSelectAll(val)
-})
-
-//改变状态
-const toggleTodoStatus = (todo) => {
-  todo.status = todo.status === 'completed' ? 'pending' : 'completed'
-  todo.updateTime = formatTime(new Date())
-}
-// 格式化时间
-const formatTime = (date) => {
-  const pad = (n) => n.toString().padStart(2, '0')
-  return `${date.getFullYear()}/${pad(date.getMonth() + 1)}/${pad(date.getDate())} ${pad(date.getHours())}:${pad(date.getMinutes())}:${pad(date.getSeconds())}`
-}
-
-// 添加待办
-const addTodo = () => {
-  if (!newTodo.value.trim()) return
-  const now = new Date()
-  const timeStr = formatTime(now)
-  todos.value.push({
-    id: idCounter++,
-    name: newTodo.value.trim(),
-    status: 'pending',
-    createTime: timeStr,
-    updateTime: timeStr
-  })
-  newTodo.value = ''
-}
-
-// 删除待办
-const deleteTodo = (id) => {
-  ElMessageBox.confirm(
-      '确定要删除这个待办事项吗？此操作无法撤销。',
-      '确认删除',
-      {
-        confirmButtonText: '删除',
-        cancelButtonText: '取消',
-        type: 'warning',
-        customClass: 'delete-confirm-box',
-      }
-  )
-      .then(() => {
-        // 用户点击「删除」后执行删除
-        todos.value = todos.value.filter(t => t.id !== id)
-        selectedTodos.value = selectedTodos.value.filter(tId => tId !== id)
-      })
-      .catch(() => {
-        // 用户点击「取消」或关闭弹窗，不做任何操作
-      })
-}
-
-// 批量删除
-const batchDelete = () => {
-  todos.value = todos.value.filter(t => !selectedTodos.value.includes(t.id))
-  selectedTodos.value = []
-}
-
-// 编辑待办
-// 打开编辑弹窗
-const openEditModal = (todo) => {
-  currentTodo.value = todo
-  editTodoName.value = todo.name
-  isEditModalVisible.value = true
-}
-
-// 保存编辑
-const saveEditTodo = () => {
-  if (!editTodoName.value.trim()) return
-  currentTodo.value.name = editTodoName.value.trim()
-  currentTodo.value.updateTime = formatTime(new Date())
-  isEditModalVisible.value = false
-}
-
-// 取消编辑
-const cancelEditTodo = () => {
-  isEditModalVisible.value = false
-  currentTodo.value = null
-  editTodoName.value = ''
-}
-
-// 全选/取消全选
-const toggleSelectAll = (val) => {
-  if (val) {
-    selectedTodos.value = todos.value.map(t => t.id)
-  } else {
-    selectedTodos.value = []
-  }
-}
-
-
+import { ElMessageBox } from "element-plus"
+// 引入 Pinia 状态
+import { useTodoStore } from '/src/stores/todo.js'
+const todoStore = useTodoStore()
 </script>
 
 <template>
@@ -118,13 +13,13 @@ const toggleSelectAll = (val) => {
       <!-- 输入区域 -->
       <div class="todo-input-wrapper">
         <input
-            v-model="newTodo"
+            v-model="todoStore.newTodo"
             type="text"
             placeholder="添加新的待办事项..."
             class="todo-input"
-            @keyup.enter="addTodo"
+            @keyup.enter="todoStore.addTodo"
         />
-        <button class="todo-add-btn" @click="addTodo">
+        <button class="todo-add-btn" @click="todoStore.addTodo">
           <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2">
             <line x1="12" y1="5" x2="12" y2="19"></line>
             <line x1="5" y1="12" x2="19" y2="12"></line>
@@ -134,11 +29,11 @@ const toggleSelectAll = (val) => {
 
       <!-- 统计信息 -->
       <div class="todo-stats">
-        <span>总计: {{ todos.length }} | 已完成: {{ completedCount }} | 待完成: {{ pendingCount }}</span>
+        <span>总计: {{ todoStore.todos.length }} | 已完成: {{ todoStore.completedCount }} | 待完成: {{ todoStore.pendingCount }}</span>
         <button
             class="todo-batch-delete-btn"
-            :disabled="selectedTodos.length === 0"
-            @click="batchDelete"
+            :disabled="todoStore.selectedTodos.length === 0"
+            @click="todoStore.batchDelete"
         >
           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
             <polyline points="3 6 5 6 21 6"></polyline>
@@ -156,8 +51,7 @@ const toggleSelectAll = (val) => {
             <th class="checkbox-col">
               <input
                   type="checkbox"
-                  v-model="selectAll"
-                  @change="toggleSelectAll"
+                  v-model="todoStore.selectAll"
               />
             </th>
             <th>名称</th>
@@ -168,14 +62,14 @@ const toggleSelectAll = (val) => {
           </tr>
           </thead>
           <tbody>
-          <tr v-if="todos.length === 0">
+          <tr v-if="todoStore.todos.length === 0">
             <td colspan="6" class="todo-empty">暂无待办事项，添加一个吧！</td>
           </tr>
-          <tr v-for="todo in todos" :key="todo.id">
+          <tr v-for="todo in todoStore.todos" :key="todo.id">
             <td class="checkbox-col">
               <input
                   type="checkbox"
-                  v-model="selectedTodos"
+                  v-model="todoStore.selectedTodos"
                   :value="todo.id"
               />
             </td>
@@ -197,10 +91,16 @@ const toggleSelectAll = (val) => {
                     stroke="currentColor"
                     stroke-width="2"
                     class="todo-lock"
-                    @click="toggleTodoStatus(todo)"
+                    @click="todoStore.toggleTodoStatus(todo)"
                 >
-                  <rect x="3" y="11" width="18" height="11" rx="2" ry="2"></rect>
-                  <path d="M7 11V7a5 5 0 0 1 10 0v4"></path>
+                  <g v-if="todo.status === 'pending'">
+                    <rect x="3" y="11" width="18" height="11" rx="2" ry="2"></rect>
+                    <path d="M7 11V7a5 5 0 0 1 9.9 1"></path>
+                  </g>
+                  <g v-else>
+                    <rect x="3" y="11" width="18" height="11" rx="2" ry="2"></rect>
+                    <path d="M7 11V7a5 5 0 0 1 10 0v4"></path>
+                  </g>
                 </svg>
               </el-tooltip>
             </td>
@@ -220,51 +120,64 @@ const toggleSelectAll = (val) => {
               {{ todo.updateTime }}
             </td>
             <td class="todo-actions">
-              <button class="todo-action-btn todo-edit-btn" @click="openEditModal(todo)">
+              <button class="todo-action-btn todo-edit-btn" @click="todoStore.openEditModal(todo)">
                 <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                   <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path>
                   <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path>
                 </svg>
               </button>
-              <button class="todo-action-btn todo-delete-btn" @click="deleteTodo(todo.id)">
+              <button class="todo-action-btn todo-delete-btn"
+                      @click="
+                      ElMessageBox.confirm(
+                        '确定要删除这个待办事项吗？此操作无法撤销。',
+                        '确认删除',
+                        {
+                          confirmButtonText: '删除',
+                          cancelButtonText: '取消',
+                          type: 'warning',
+                          customClass: 'delete-confirm-box',
+                        }
+                      ).then(() => {
+                        todoStore.deleteTodo(todo.id)
+                      }).catch(() => {})
+                    ">
                 <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                   <polyline points="3 6 5 6 21 6"></polyline>
                   <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path>
                 </svg>
               </button>
             </td>
-
           </tr>
           </tbody>
         </table>
       </div>
-
     </div>
   </div>
+
   <!-- 编辑弹窗 -->
   <el-dialog
-      v-model="isEditModalVisible"
+      v-model="todoStore.isEditModalVisible"
       title="编辑待办事项"
       width="500px"
       :close-on-click-modal="false"
   >
     <div style="margin-bottom:16px;">请修改待办名称：</div>
     <el-input
-        v-model="editTodoName"
+        v-model="todoStore.editTodoName"
         placeholder="请输入待办事项"
-        @keyup.enter="saveEditTodo"
+        @keyup.enter="todoStore.saveEditTodo"
     />
-
     <template #footer>
     <span class="dialog-footer">
-      <el-button @click="cancelEditTodo">取消</el-button>
-      <el-button type="primary" @click="saveEditTodo">
+      <el-button @click="todoStore.cancelEditTodo">取消</el-button>
+      <el-button type="primary" @click="todoStore.saveEditTodo">
         保存修改
       </el-button>
     </span>
     </template>
   </el-dialog>
 </template>
+
 <style scoped>
 :global(html),
 :global(body) {
@@ -302,7 +215,6 @@ const toggleSelectAll = (val) => {
   margin: 0 0 24px 0;
 }
 
-/* 输入区域 */
 .todo-input-wrapper {
   display: flex;
   gap: 12px;
@@ -341,7 +253,6 @@ const toggleSelectAll = (val) => {
   background-color: #3341d1;
 }
 
-/* 统计信息 */
 .todo-stats {
   display: flex;
   justify-content: space-between;
@@ -375,7 +286,6 @@ const toggleSelectAll = (val) => {
   color: #ef4444;
 }
 
-/* 表格样式 */
 .todo-table-wrapper {
   border: 1px solid #e5e7eb;
   border-radius: 8px;
@@ -390,7 +300,6 @@ const toggleSelectAll = (val) => {
   table-layout: fixed;
 }
 
-/* 设置每一列的宽度 */
 .todo-table th:nth-child(1),
 .todo-table td:nth-child(1) {
   width: 20px;
@@ -446,7 +355,6 @@ const toggleSelectAll = (val) => {
   background-color: #f9fafb;
 }
 
-/* 名称列内容换行 */
 .todo-table td:nth-child(2) {
   word-wrap: break-word;
   word-break: break-all;
@@ -463,7 +371,6 @@ const toggleSelectAll = (val) => {
   padding: 32px 0;
 }
 
-/* 状态样式 */
 .todo-status {
   display: inline-block;
   padding: 4px 8px;
@@ -472,6 +379,7 @@ const toggleSelectAll = (val) => {
   margin-right: 8px;
   white-space: nowrap;
 }
+
 .todo-status-completed {
   background-color: #10b981;
   color: white;
@@ -493,7 +401,6 @@ const toggleSelectAll = (val) => {
   flex-shrink: 0;
 }
 
-/* 操作按钮 */
 .todo-actions {
   display: flex;
   gap: 8px;
@@ -525,10 +432,9 @@ const toggleSelectAll = (val) => {
   border-color: #ef4444;
   color: #ef4444;
 }
-
 </style>
+
 <style>
-/* 全局样式，用于覆盖 element-plus 的弹窗样式 */
 .delete-confirm-box {
   --el-messagebox-title-color: #1f2937;
   --el-messagebox-content-color: #4b5563;
